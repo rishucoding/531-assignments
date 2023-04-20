@@ -32,3 +32,21 @@
 * Since it takes k steps to obtain the APSP distance matrix, we can have an intermediate distance matrix D(k). 
 
 * Blocked APSP: (1) partition D into blocks (BxB submatrices), B is called as blocking factor. 
+
+## Implementation discussion for blocking: 
+* Deciding blocking factor -- have it parameterized. We can empirically check performance for {2,4,8,16,32,64}. Could this be bounded by the number of blocks to fit in the GPU? 
+* Phase1: computing pivot block: each k can be parallelized! (intra-block)
+eg: For a particular iteration k, d(1,1), d(1,2), d(2,1), d(2,2) can be parallelized because they are independent of each other, and only dependent on the previous iteration values.
+* Phase2: computing pivot row/colm: each block can be parallelized! (inter-block)
+* Phase3: computing other blocks: each block can be parallelized! (inter-block)
+
+
+## Plan: 
+* Let's first implement a sequential version of the blocked APSP. This would ensure that we have a correct working implementation with the blocked organization.
+* Modity the sequential blocked to the parallel blocked -- what are the opportunities and how the semantics of the GPU could be used? 
+
+## Sequential blocked APSP: 
+* $ gcc blocked_seq.cc -lm
+Note: -lm flag is needed as we have math library in the code.
+
+
