@@ -129,30 +129,14 @@ int main(int argc, char** argv) {
         int cell_rowid = rnd_id * blocking_factor; // row_id
         int cell_colmid = rnd_id * blocking_factor; // row_id
         submatrix_fw_krnl_p1(cell_rowid, rnd_id, d);
-        // for(int b_k = 0; b_k < blocking_factor; b_k++){
-        //     //accessing each element in the submatrix
-        //     for(int b_i = 0; b_i < blocking_factor; b_i++){
-        //         for(int b_j = 0; b_j < blocking_factor; b_j++){
-        //             //index for i,j
-        //             int i_j_idx = (cell_rowid + b_i) * n + (rnd_id * blocking_factor) + b_j; //x_posn + y_posn
-        //             int i_k_idx = (cell_rowid + b_i) * n + (rnd_id * blocking_factor) + b_k; //x_posn + y_posn
-        //             int k_j_idx = (cell_rowid + b_k) * n + (rnd_id * blocking_factor) + b_j; //x_posn + y_posn
-        //             if((w = d[i_k_idx] + d[k_j_idx]) < d[i_j_idx]){
-        //                 d[i_j_idx] = w;
-        //             }
-        //         }    
-        //     }
-        // }
 
         //Phase2 -- apply fw on the pivot-row and pivot-colm
         // (1) cover row
         // (2) cover colm
         //pivot block is (rnd_id, rnd_id)
         //par1: cover row
-        //cnt = 0;
         for(int block = 0; block < rounds; block++){
            if(block != rnd_id){
-            //cnt++;
             submatrix_fw_krnl_p2(cell_rowid, block, d, rnd_id);
            }
         }
@@ -161,38 +145,22 @@ int main(int argc, char** argv) {
         //par2: cover colm
         for(int block = 0; block < rounds; block++){
            if(block != rnd_id){
-            cnt++;
             submatrix_fw_krnl_p3(block*blocking_factor, rnd_id, d, rnd_id);
            }
         }
-        //printf("Phase2 executed by: %d\n", cnt);
-        //cnt = 0;
+        
         //Phase3 -- apply fw on the non-pivot blocks
         for(int rnd_i = 0; rnd_i < rounds; rnd_i++){
             if(rnd_i != rnd_id){
                 for(int rnd_j = 0; rnd_j < rounds; rnd_j++){
                     if(rnd_j != rnd_id){
-                        cnt++;
                         submatrix_fw_krnl_p4(rnd_i*blocking_factor, rnd_j, d, rnd_id);
                     }
                 }
             }
         }
-        //printf("Phase3 executed by: %d\n", cnt);
 
     }
-
-
-    //RJ: main compute kernel
-    // Floyd-Warshall
-    // for (int k = 0; k < n; ++k) {
-    //     for (int i = 0; i < n; ++i) {
-    //         for (int j = 0; j < n; ++j)
-    //             if ((w = d[i * n + k] + d[k * n + j]) < d[i * n + j])
-    //                 d[i * n + j] = w;
-    //     }
-    // }
-
 
     // ouput
     FILE *outfile = fopen(argv[2], "w");
