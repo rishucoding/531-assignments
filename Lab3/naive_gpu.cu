@@ -7,7 +7,6 @@
 #include <cuda_runtime.h>
 #include <iostream>
 using namespace std::chrono;
-clock_t start = clock();
 
 #define INF 200
 
@@ -18,9 +17,6 @@ int rounds = 0;
 
 __global__ void gpu_submatrix_fw_krnl_p1(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
     int w = 0;
-    //int b_k =  threadIdx.x;
-    //printf("Received thread idx = %d\n", b_k);
-    //printf("Print order: i_j_idx, i_k_idx, k_j_idx \n");
     for(int b_k = 0; b_k < blocking_factor; b_k++){
             //accessing each element in the submatrix
             for(int b_i = 0; b_i < blocking_factor; b_i++){
@@ -32,10 +28,7 @@ __global__ void gpu_submatrix_fw_krnl_p1(int row_offset, int colm_offset, int *a
                     if((w = arr[i_k_idx] + arr[k_j_idx]) < arr[i_j_idx]){
                         arr[i_j_idx] = w;
                     }
-                    //printf("%d \t %d\t %d\n", arr[i_j_idx], arr[i_k_idx], arr[k_j_idx]);
-                    //printf("%d\t%d\t%d\n", i_j_idx, i_k_idx, k_j_idx);
                 }
-                //printf("\n");    
             }
         }
 }
@@ -55,10 +48,7 @@ __global__ void gpu_submatrix_fw_krnl_p2(int row_offset, int colm_offset, int *a
                     if((w = arr[i_k_idx] + arr[k_j_idx]) < arr[i_j_idx]){
                         arr[i_j_idx] = w;
                     }
-                    //printf("%d\t%d\t%d\n", i_j_idx, i_k_idx, k_j_idx);
-                    //printf("%d \t %d\t %d\n", arr[i_j_idx], arr[i_k_idx], arr[k_j_idx]);
                 }
-                //printf("\n");    
             }
         }
 }
@@ -77,10 +67,7 @@ __global__ void gpu_submatrix_fw_krnl_p3(int row_offset, int colm_offset, int *a
                     if((w = arr[i_k_idx] + arr[k_j_idx]) < arr[i_j_idx]){
                         arr[i_j_idx] = w;
                     }
-                    //printf("%d\t%d\t%d\n", i_j_idx, i_k_idx, k_j_idx);
-                    //printf("%d \t %d\t %d\n", arr[i_j_idx], arr[i_k_idx], arr[k_j_idx]);
-                }
-                //printf("\n");    
+                }  
             }
         }
 }
@@ -101,10 +88,7 @@ __global__ void gpu_submatrix_fw_krnl_p4(int row_offset, int colm_offset, int *a
                     if((w = arr[i_k_idx] + arr[k_j_idx]) < arr[i_j_idx]){
                         arr[i_j_idx] = w;
                     }
-                    //printf("%d \t %d\t %d\n", arr[i_j_idx], arr[i_k_idx], arr[k_j_idx]);
-                    //printf("%d\t%d\t%d\n", i_j_idx, i_k_idx, k_j_idx);
                 }
-                //printf("\n");    
             }
         }
 }
@@ -138,8 +122,7 @@ int main(int argc, char** argv) {
     // N/B rounds --> 3 phases --> B iterations
     // seems like phase2, phase 3 can be parallelized.
     
-    //auto stop = high_resolution_clock::now();
-    //auto duration = duration_cast<microseconds>(stop - stop);
+
     printf("Rounds are: %d\n", rounds);
     for (int rnd_id = 0; rnd_id < rounds; rnd_id++){ // number of rounds
         //do 3 phases in each round
@@ -154,12 +137,8 @@ int main(int argc, char** argv) {
         //start = high_resolution_clock::now();
         gpu_submatrix_fw_krnl_p1<<<dimGrid, dimBlock>>>(cell_rowid, rnd_id, gpu_d, rnd_id, blocking_factor, n);
         cudaDeviceSynchronize();
-        //stop = high_resolution_clock::now();
-        //duration += duration_cast<microseconds>(stop - start);
-        // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
-        // cudaDeviceSynchronize();
-        // cudaMemcpy(gpu_d, d, sizeof(int)* n * n, cudaMemcpyHostToDevice);
-        // cudaDeviceSynchronize();
+
+
         //Phase2 -- apply fw on the pivot-row and pivot-colm
         // (1) cover row
         // (2) cover colm
@@ -171,23 +150,9 @@ int main(int argc, char** argv) {
 
         //start = high_resolution_clock::now();
         gpu_submatrix_fw_krnl_p2<<<dimGrid, dimBlock>>>(cell_rowid, 0, gpu_d, rnd_id, blocking_factor, n);
-        // for(int block = 0; block < rounds; block++){
-        //    if(block != rnd_id){
-        //     gpu_submatrix_fw_krnl_p2<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(cell_rowid, block, gpu_d, rnd_id, blocking_factor, n);
-        //    }
-        // }
 
         //par2: cover colm
         gpu_submatrix_fw_krnl_p3<<<dimGrid, dimBlock>>>(0*blocking_factor, rnd_id, gpu_d, rnd_id, blocking_factor, n);
-        // for(int block = 0; block < rounds; block++){
-        //    if(block != rnd_id){
-        //     gpu_submatrix_fw_krnl_p3<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(block*blocking_factor, rnd_id, gpu_d, rnd_id, blocking_factor, n);
-        //    }
-        // }
-
-        // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
-        // cudaDeviceSynchronize();
-        // cudaMemcpy(gpu_d, d, sizeof(int)* n * n, cudaMemcpyHostToDevice);
         cudaDeviceSynchronize();
         
 
@@ -195,24 +160,7 @@ int main(int argc, char** argv) {
         dimGrid = (rounds);
         dimBlock = (rounds);
         gpu_submatrix_fw_krnl_p4<<<dimGrid, dimBlock>>>(0*blocking_factor, 0, gpu_d, rnd_id, blocking_factor, n);
-        // for(int rnd_i = 0; rnd_i < rounds; rnd_i++){
-        //     if(rnd_i != rnd_id){
-        //         for(int rnd_j = 0; rnd_j < rounds; rnd_j++){
-        //             if(rnd_j != rnd_id){
-        //                 gpu_submatrix_fw_krnl_p4<<<dimGrid, dimBlock>>>(rnd_i*blocking_factor, rnd_j, gpu_d, rnd_id, blocking_factor, n);
-        //                 //submatrix_fw_krnl_p4(rnd_i*blocking_factor, rnd_j, d, rnd_id);
-        //             }
-        //         }
-        //     }
-        // }
-
-        // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
-        // cudaDeviceSynchronize();
-        // cudaMemcpy(gpu_d, d, sizeof(int)* n * n, cudaMemcpyHostToDevice);
-        cudaDeviceSynchronize();
-        // stop = high_resolution_clock::now();
-        // duration += duration_cast<microseconds>(stop - start);
-        
+        cudaDeviceSynchronize();        
     }
     
     //Obtain back the data from GPU
