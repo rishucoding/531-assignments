@@ -13,11 +13,13 @@ clock_t start = clock();
 
 //RJ: defining the variables for blocked implementation
 int n;
-int blocking_factor = 50;
+int blocking_factor = 25;
 int rounds = 0;
 
 __global__ void gpu_submatrix_fw_krnl_p1(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
     int w = 0;
+    //int b_k =  threadIdx.x;
+    //printf("Received thread idx = %d\n", b_k);
     //printf("Print order: i_j_idx, i_k_idx, k_j_idx \n");
     for(int b_k = 0; b_k < blocking_factor; b_k++){
             //accessing each element in the submatrix
@@ -41,6 +43,7 @@ __global__ void gpu_submatrix_fw_krnl_p1(int row_offset, int colm_offset, int *a
 
 __global__ void gpu_submatrix_fw_krnl_p2(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
     int w = 0;
+    colm_offset = threadIdx.x;
     for(int b_k = 0; b_k < blocking_factor; b_k++){
             //accessing each element in the submatrix
             for(int b_i = 0; b_i < blocking_factor; b_i++){
@@ -61,7 +64,8 @@ __global__ void gpu_submatrix_fw_krnl_p2(int row_offset, int colm_offset, int *a
 }
 
 __global__ void gpu_submatrix_fw_krnl_p3(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
-     int w = 0;
+    int w = 0;
+    row_offset = threadIdx.x * blocking_factor;
     for(int b_k = 0; b_k < blocking_factor; b_k++){
             //accessing each element in the submatrix
             for(int b_i = 0; b_i < blocking_factor; b_i++){
@@ -83,6 +87,9 @@ __global__ void gpu_submatrix_fw_krnl_p3(int row_offset, int colm_offset, int *a
 
 __global__ void gpu_submatrix_fw_krnl_p4(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
     int w = 0;
+    row_offset = threadIdx.x * blocking_factor;
+    colm_offset = blockIdx.x;
+    //printf("(x,y) is: (%d, %d)\n", threadIdx.x, blockIdx.x);
     for(int b_k = 0; b_k < blocking_factor; b_k++){
             //accessing each element in the submatrix
             for(int b_i = 0; b_i < blocking_factor; b_i++){
@@ -121,6 +128,7 @@ int main(int argc, char** argv) {
 
     
     
+    auto start = high_resolution_clock::now();
     //RJ: GPU init
     int *gpu_d;
     cudaMalloc((void **)&gpu_d, sizeof(int *) * n * n);
@@ -129,9 +137,9 @@ int main(int argc, char** argv) {
     //RJ: notes
     // N/B rounds --> 3 phases --> B iterations
     // seems like phase2, phase 3 can be parallelized.
-    auto start = high_resolution_clock::now();
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - stop);
+    
+    //auto stop = high_resolution_clock::now();
+    //auto duration = duration_cast<microseconds>(stop - stop);
     printf("Rounds are: %d\n", rounds);
     for (int rnd_id = 0; rnd_id < rounds; rnd_id++){ // number of rounds
         //do 3 phases in each round
@@ -143,11 +151,11 @@ int main(int argc, char** argv) {
         //GPU declaration and kernel launch:
         dim3 dimGrid = (1);
         dim3 dimBlock = 1;
-        start = high_resolution_clock::now();
-        gpu_submatrix_fw_krnl_p1<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)>>>(cell_rowid, rnd_id, gpu_d, rnd_id, blocking_factor, n);
+        //start = high_resolution_clock::now();
+        gpu_submatrix_fw_krnl_p1<<<dimGrid, dimBlock>>>(cell_rowid, rnd_id, gpu_d, rnd_id, blocking_factor, n);
         cudaDeviceSynchronize();
-        stop = high_resolution_clock::now();
-        duration += duration_cast<microseconds>(stop - start);
+        //stop = high_resolution_clock::now();
+        //duration += duration_cast<microseconds>(stop - start);
         // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
         // cudaDeviceSynchronize();
         // cudaMemcpy(gpu_d, d, sizeof(int)* n * n, cudaMemcpyHostToDevice);
@@ -159,21 +167,23 @@ int main(int argc, char** argv) {
         //par1: cover row
         
         dimGrid = (1);
-        dimBlock = 1;
+        dimBlock = rounds;
 
-        start = high_resolution_clock::now();
-        for(int block = 0; block < rounds; block++){
-           if(block != rnd_id){
-            gpu_submatrix_fw_krnl_p2<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(cell_rowid, block, gpu_d, rnd_id, blocking_factor, n);
-           }
-        }
+        //start = high_resolution_clock::now();
+        gpu_submatrix_fw_krnl_p2<<<dimGrid, dimBlock>>>(cell_rowid, 0, gpu_d, rnd_id, blocking_factor, n);
+        // for(int block = 0; block < rounds; block++){
+        //    if(block != rnd_id){
+        //     gpu_submatrix_fw_krnl_p2<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(cell_rowid, block, gpu_d, rnd_id, blocking_factor, n);
+        //    }
+        // }
 
         //par2: cover colm
-        for(int block = 0; block < rounds; block++){
-           if(block != rnd_id){
-            gpu_submatrix_fw_krnl_p3<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(block*blocking_factor, rnd_id, gpu_d, rnd_id, blocking_factor, n);
-           }
-        }
+        gpu_submatrix_fw_krnl_p3<<<dimGrid, dimBlock>>>(0*blocking_factor, rnd_id, gpu_d, rnd_id, blocking_factor, n);
+        // for(int block = 0; block < rounds; block++){
+        //    if(block != rnd_id){
+        //     gpu_submatrix_fw_krnl_p3<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(block*blocking_factor, rnd_id, gpu_d, rnd_id, blocking_factor, n);
+        //    }
+        // }
 
         // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
         // cudaDeviceSynchronize();
@@ -182,31 +192,34 @@ int main(int argc, char** argv) {
         
 
         //Phase3 -- apply fw on the non-pivot blocks
-        for(int rnd_i = 0; rnd_i < rounds; rnd_i++){
-            if(rnd_i != rnd_id){
-                for(int rnd_j = 0; rnd_j < rounds; rnd_j++){
-                    if(rnd_j != rnd_id){
-                        gpu_submatrix_fw_krnl_p4<<<dimGrid, dimBlock, blocking_factor * blocking_factor * sizeof(int)*2>>>(rnd_i*blocking_factor, rnd_j, gpu_d, rnd_id, blocking_factor, n);
-                        //submatrix_fw_krnl_p4(rnd_i*blocking_factor, rnd_j, d, rnd_id);
-                    }
-                }
-            }
-        }
+        dimGrid = (rounds);
+        dimBlock = (rounds);
+        gpu_submatrix_fw_krnl_p4<<<dimGrid, dimBlock>>>(0*blocking_factor, 0, gpu_d, rnd_id, blocking_factor, n);
+        // for(int rnd_i = 0; rnd_i < rounds; rnd_i++){
+        //     if(rnd_i != rnd_id){
+        //         for(int rnd_j = 0; rnd_j < rounds; rnd_j++){
+        //             if(rnd_j != rnd_id){
+        //                 gpu_submatrix_fw_krnl_p4<<<dimGrid, dimBlock>>>(rnd_i*blocking_factor, rnd_j, gpu_d, rnd_id, blocking_factor, n);
+        //                 //submatrix_fw_krnl_p4(rnd_i*blocking_factor, rnd_j, d, rnd_id);
+        //             }
+        //         }
+        //     }
+        // }
 
         // cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
         // cudaDeviceSynchronize();
         // cudaMemcpy(gpu_d, d, sizeof(int)* n * n, cudaMemcpyHostToDevice);
         cudaDeviceSynchronize();
-        stop = high_resolution_clock::now();
-        duration += duration_cast<microseconds>(stop - start);
+        // stop = high_resolution_clock::now();
+        // duration += duration_cast<microseconds>(stop - start);
         
     }
     
     //Obtain back the data from GPU
     cudaMemcpy(d, gpu_d, sizeof(int)* n * n, cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
-    //auto stop = high_resolution_clock::now();
-    //auto duration = duration_cast<microseconds>(stop - start);
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
     std::cout << ">>>> Time to compute on GPU: " << duration.count()/(1000000.0) << std::endl;
     
     // ouput
