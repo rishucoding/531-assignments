@@ -12,7 +12,7 @@ using namespace std::chrono;
 
 //RJ: defining the variables for blocked implementation
 int n;
-int blocking_factor = 25;
+int blocking_factor = 10;
 int rounds = 0;
 
 __global__ void gpu_submatrix_fw_krnl_p1(int row_offset, int colm_offset, int *arr, int rnd_id, int blocking_factor, int n){
